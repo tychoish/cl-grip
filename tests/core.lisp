@@ -2,7 +2,8 @@
   (:use :cl
 	:rove
 	:grip.level
-	:grip.message))
+	:grip.message
+	:grip.logger))
 (in-package :test.grip.core)
 
 (deftest level
@@ -34,6 +35,9 @@
     (ok (string= "emergency+2" (priority-string (make-instance 'priority :value 102)))))
   (testing "string production error"
     (ok (string= "9001" (grip.level::string-for-level 9001))))
+  (testing "constructor"
+    (ok (eq +info+ (make-priority +info+)))
+    (ok (equal 70 (grip.level::value (make-priority 70)))))
   (testing "priority greater than or equal"
     (testing "two priority values"
       (ok (priority>= +alert+ +error+))
@@ -101,7 +105,170 @@
 	(setf (gethash "b" ht) 2)
       (ok (string= "a='one' b='2'" (resolve-output nil (make-instance 'structured-message :payload ht))))))))
 
+
+(defclass in-memory-journal (base-journal)
+  ((output-target
+    :initform (make-array 1 :adjustable t)
+    :reader output-target))
+  (:documentation "a basic logger with similar semantics to the basic
+  journals but that saves "))
+
+(defmethod send-message ((logger in-memory-journal) (msg base-message))
+  (when (loggable-p msg (threshold logger))
+    (vector-push-extend msg (output-target logger))
+    (format-message logger (message-formatter logger) msg)))
+
 (deftest logger
   (testing "format specialization"
+    (ok (string= "hello world" (format-message nil (make-instance 'basic-formatter) (make-message +info+ "hello world"))))
+    (ok (search "[p=info] hello world" (format-message (make-instance 'base-journal)
+						       (make-instance 'basic-formatter)
+						       (make-message +info+ "hello world")))))
+  (testing "log method"
+    (loop for target in (list (make-instance 'base-journal) (make-instance 'stream-journal) (make-instance 'in-memory-journal))
+	  do
+	     (loop for level in (list +info+ +notice+ +warning+ +error+ +alert+ +critical+ +emergency+)
+		   do
+		      (loop for msg in (list "hello world" (make-instance 'simple-message :description "hello world"))
+			    do
+			       (ok (search (priority-string level) (log> target level msg)))
+			       (ok (not (log> target (make-instance 'priority :value (- 10 (grip.level::value level))) msg)))
+			       (ok (search "hello world" (log> target level msg)))))))
+  (testing "level methods"
+    (loop for target in (list (make-instance 'base-journal) (make-instance 'stream-journal) (make-instance 'in-memory-journal))
+	  do
+	     (ok (not (debug> target "hello")))
+	     (ok (not (trace> target "hello")))
 
-    ))
+	     (ok (search "info" (info> target "hello world")))
+	     (ok (search "hello world" (info> target "hello world")))
+
+	     (ok (search "notice" (notice> target "hello world")))
+	     (ok (search "hello world" (notice> target "hello world")))
+
+	     (ok (search "warning" (warning> target "hello world")))
+	     (ok (search "hello world" (warning> target "hello world")))
+
+	     (ok (search "error" (error> target "hello world")))
+	     (ok (search "hello world" (error> target "hello world")))
+
+	     (ok (search "critical" (critical> target "hello world")))
+	     (ok (search "hello world" (critical> target "hello world")))
+
+	     (ok (search "alert" (alert> target "hello world")))
+	     (ok (search "hello world" (alert> target "hello world")))
+
+	     (ok (search "emergency" (emergency> target "hello world")))
+	     (ok (search "hello world" (emergency> target "hello world"))))))
+
+(defun with-tmp-logger (tmp-logger function)
+  (let ((std grip:*default-logger*))
+    (setf grip:*default-logger* tmp-logger)
+    (unwind-protect (funcall function)
+      (setf grip:*default-logger* std))))
+
+(defmacro with-logger (logger &body body)
+  `(with-tmp-logger ,logger (lambda () ,@body)))
+
+(deftest grip
+  (testing "log"
+    (let* ((logger (make-instance 'in-memory-journal :threshold (make-instance 'priority :value 0) :name "mem"))
+	   (expected (with-logger logger (grip:log> +info+ "hi there")))
+	   (output (vector-pop (output-target logger))))
+      (ok (search "hi there" expected))
+      (ok (search "mem" expected))
+      (ok (eq +info+ (level output)))
+      (ok (search "info" expected))
+      (ok (string= "hi there" (description output)))))
+
+  (testing "trace"
+    (let* ((logger (make-instance 'in-memory-journal :threshold (make-instance 'priority :value 0) :name "mem"))
+	   (expected (with-logger logger (grip:trace> "hi there")))
+	   (output (vector-pop (output-target logger))))
+      (ok (search "hi there" expected))
+      (ok (search "mem" expected))
+      (ok (eq +trace+ (level output)))
+      (ok (search "trace" expected))
+      (ok (string= "hi there" (description output)))))
+
+  (testing "debug"
+    (let* ((logger (make-instance 'in-memory-journal :threshold (make-instance 'priority :value 0) :name "mem"))
+	   (expected (with-logger logger (grip:debug> "hi there")))
+	   (output (vector-pop (output-target logger))))
+      (ok (search "hi there" expected))
+      (ok (search "mem" expected))
+      (ok (eq +debug+ (level output)))
+      (ok (search "debug" expected))
+      (ok (string= "hi there" (description output)))))
+
+  (testing "info"
+    (let* ((logger (make-instance 'in-memory-journal :threshold (make-instance 'priority :value 0) :name "mem"))
+	   (expected (with-logger logger (grip:info> "hi there")))
+	   (output (vector-pop (output-target logger))))
+      (ok (search "hi there" expected))
+      (ok (search "mem" expected))
+      (ok (eq +info+ (level output)))
+      (ok (search "info" expected))
+      (ok (string= "hi there" (description output)))))
+
+  (testing "notice"
+    (let* ((logger (make-instance 'in-memory-journal :threshold (make-instance 'priority :value 0) :name "mem"))
+	   (expected (with-logger logger (grip:notice> "hi there")))
+	   (output (vector-pop (output-target logger))))
+      (ok (search "hi there" expected))
+      (ok (search "mem" expected))
+      (ok (eq +notice+ (level output)))
+      (ok (search "notice" expected))
+      (ok (string= "hi there" (description output)))))
+
+  (testing "warning"
+    (let* ((logger (make-instance 'in-memory-journal :threshold (make-instance 'priority :value 0) :name "mem"))
+	   (expected (with-logger logger (grip:warning> "hi there")))
+	   (output (vector-pop (output-target logger))))
+      (ok (search "hi there" expected))
+      (ok (search "mem" expected))
+      (ok (eq +warning+ (level output)))
+      (ok (search "warning" expected))
+      (ok (string= "hi there" (description output)))))
+
+  (testing "error"
+    (let* ((logger (make-instance 'in-memory-journal :threshold (make-instance 'priority :value 0) :name "mem"))
+	   (expected (with-logger logger (grip:error> "hi there")))
+	   (output (vector-pop (output-target logger))))
+      (ok (search "hi there" expected))
+      (ok (search "mem" expected))
+      (ok (eq +error+ (level output)))
+      (ok (search "error" expected))
+      (ok (string= "hi there" (description output)))))
+
+  (testing "critical"
+    (let* ((logger (make-instance 'in-memory-journal :threshold (make-instance 'priority :value 0) :name "mem"))
+	   (expected (with-logger logger (grip:critical> "hi there")))
+	   (output (vector-pop (output-target logger))))
+      (ok (search "hi there" expected))
+      (ok (search "mem" expected))
+      (ok (eq +critical+ (level output)))
+      (ok (search "critical" expected))
+      (ok (string= "hi there" (description output)))))
+
+  (testing "alert"
+    (let* ((logger (make-instance 'in-memory-journal :threshold (make-instance 'priority :value 0) :name "mem"))
+	   (expected (with-logger logger (grip:alert> "hi there")))
+	   (output (vector-pop (output-target logger))))
+      (ok (search "hi there" expected))
+      (ok (search "mem" expected))
+      (ok (eq +alert+ (level output)))
+      (ok (search "alert" expected))
+      (ok (string= "hi there" (description output)))))
+
+  (testing "emergency"
+    (let* ((logger (make-instance 'in-memory-journal :threshold (make-instance 'priority :value 0) :name "mem"))
+	   (expected (with-logger logger (grip:emergency> "hi there")))
+	   (output (vector-pop (output-target logger))))
+      (ok (search "hi there" expected))
+      (ok (search "mem" expected))
+      (ok (eq +emergency+ (level output)))
+      (ok (search "emergency" expected))
+      (ok (string= "hi there" (description output)))))
+
+  (ok (string= (string-upcase "base-journal") (type-of grip:*default-logger*))))

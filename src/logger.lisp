@@ -6,9 +6,11 @@
   (:export ;; generic methods for managing logging interfaces and
 	   ;; processes
 	   :format-message
+	   :send-message
 	   ;; the default logging implementation and its accessors
 	   :stream-journal
 	   :base-journal
+	   :in-memory-journal
 	   :name
 	   :threshold
 	   :output-target
@@ -24,6 +26,7 @@
 	   :critical>
 	   :alert>
 	   :emergency>))
+
 (in-package :grip.logger)
 
 (defgeneric format-message (logger formatter message)
@@ -77,17 +80,18 @@
   (when (loggable-p msg (threshold logger))
     (write-line (format-message logger (message-formatter logger) msg) *standard-output*)))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; a high level generic logging interface
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (defgeneric log> (logger level message)
-  (:documentation "log is the core logging method, sending a message
-  object to the logger at the specified level. All other logging
-  methods should be implemented in terms of log."))
-
-(defmethod log> ((logger base-journal) (pri grip.level:priority) (message base-message))
-  (setf (level message) pri)
-  (send-message logger message))
-
-(defmethod log> ((logger base-journal) (level grip.level:priority) message)
-  (send-message logger (make-message level message)))
+  (:documentation "provides a basic shim between send-message and
+  logging methods and makes it possible to deliver messages to
+  different log levels.")
+  (:method (logger level message)
+    (send-message logger (grip.message:make-message (grip.level:make-priority level) message))))
 
 (defgeneric trace> (logger message)
   (:documentation "Sends the message to a logger at level
@@ -160,3 +164,4 @@
   implementations. The default implementation wraps 'log'.")
   (:method (logger message)
     (log> logger grip.level:+emergency+ message)))
+

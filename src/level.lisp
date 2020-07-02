@@ -3,6 +3,7 @@
   (:export :priority
 	   :priority-string
 	   :priority>=
+	   :make-priority
 	   :+debug+
 	   :+trace+
 	   :+info+
@@ -69,3 +70,8 @@
     (90 "alert")
     (100 "emergency")
     (otherwise (format nil "~D" value))))
+
+(defun make-priority (value)
+  (when (typep value 'priority)
+    (return-from make-priority value))
+  (make-instance 'priority :value value))

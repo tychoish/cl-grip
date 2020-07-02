@@ -78,6 +78,10 @@
     :type string))
   (:documentation "Simple messages just wrap a single string."))
 
+(defmethod make-message ((pri priority) (msg base-message))
+  (setf (level msg) pri)
+  msg)
+
 (defmethod make-message ((pri priority) input)
   ;; if there's an export message implemented:
   (when (export-message-p input)
@@ -86,9 +90,6 @@
       (return-from make-message out)))
 
   (typecase input
-    (base-message
-     (setf (level input) pri)
-     input)
     (string (make-instance 'simple-message :level pri :description input))
     (hash-table (make-instance 'structured-message :level pri :payload input))
     (property-list (make-instance 'structured-message :level pri :payload input))
@@ -126,7 +127,7 @@
 
 (defclass basic-formatter (format-config)
   ((timestamp-format
-    :initform '(:year #\/ :month #\/ :day #\space (:hour 2) #\: (:min 2) #\: (:sec 2))
+    :initform '(:year #\/ (:month 2) #\/ (:day 2) #\space (:hour 2) #\: (:min 2) #\: (:sec 2))
     :accessor timestamp-format
     :initarg :timestamp))
   (:documentation "a holder for configuration, composed by the journal
