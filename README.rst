@@ -18,15 +18,15 @@ Levels
 
 Grip represents levels of messages as a number between 1 and 100, with "named
 levels" occurring at intervals of 10. The levels are defined as constants in
-the ``grip.level`` package. The named levels are: 
+the ``grip.level`` package. The named levels are:
 
 - trace
-- debug   
+- debug
 - info
-- notice  
+- notice
 - warning
-- error 
-- critical   
+- error
+- critical
 - alert
 - emergency
 
@@ -44,7 +44,7 @@ simple alist/plist and hashmaps.
 The following generic functions control message creation and behavior:
 
 - loggable-p
-- export-message 
+- export-message
 - make-message
 - resolve-output
 
@@ -56,19 +56,19 @@ messages, in the case of loggers that write to streams, this may a reference
 to the stream itself, or may include a message buffer, or credentials to an
 external service. The primary implementation is the ``stream-logger`` which
 writes all messages to the provided stream, standard output by default, or
-perhaps a file. 
+perhaps a file.
 
-The following generic functions control logger behavior: 
+The following generic functions control logger behavior:
 
 - ``send-message`` delivers the message to the configured output, if the
-  message is logable. 
+  message is logable.
 - ``format-message`` formats the entire log line.
 - ``log`` send a message at a specific log level. There are implementations
   that take ``base-message`` implementations others that use ``make-message``
   to convert to a message type.
 
 By convention send-message should call ``format-message`` (which can in turn
-call ``resolve-message``). 
+call ``resolve-message``).
 
 There are also a collection of methods on ``(logger message)`` for each log
 level that are implemented generically in terms of ``log``
@@ -97,13 +97,13 @@ which you can opt into as needed.
 By default you can load the ``grip`` package and begin using the logging
 methods without further configuration: there is a default logger configured so
 that the following operations will work: ::
-  
+
   (grip:info> "log message")
 
 To send structured data: ::
-  
+
   (grip:info> '(:msg "hello"
-               :value 100))
+	       :value 100))
 
    (let ((msg (make-hash-table :test #'string=)))
      (setf (gethash "message" msg)  "test message")
@@ -112,10 +112,10 @@ To send structured data: ::
 
      (grip:error> msg))
 
-In the more advanced case, you can set up your own logger and use the
-``set-logger`` function to set the global logger, as in: :: 
+In the more advanced case, you can set up your own logger and populate the
+``*default-logger*`` variable in the grip package, as in: ::
 
-   (grip:set-logger (make-instance 'grip.logger:stream-journal :name "example" :output-target *error-output*))
+  (setf grip:*default-logger* (make-instance 'grip.logger:stream-journal :name "example" :output-target *error-output*))
 
 At this point, you can use the default logging methods which will now send
 standard error. Alternately, you can define a logging instance and store it
@@ -128,7 +128,6 @@ centerally (or pass it around) and pass it directly to logging methods, as in:
 Extension
 ---------
 
-    
+
 Development
 -----------
-

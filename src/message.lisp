@@ -3,6 +3,9 @@
   (:import-from :trivial-types
 		:association-list
 		:property-list)
+  (:import-from :grip.level
+		:priority
+		:priority>=)
   (:import-from :local-time
 		:now)
   (:export :base-message ;; base message class
@@ -38,14 +41,14 @@
   (:documentation "test if a message is logable"))
 
 (defclass base-message ()
-  ((conditional 
+  ((conditional
     :initarg :when
-    :accessor conditional 
+    :accessor conditional
     :type boolean
     :initform t)
    (timestamp
     :reader timestamp
-    :type timestamp
+    :type local-time:timestamp
     :initform (now))
    (level
     :type priority
@@ -89,15 +92,27 @@
     (string (make-instance 'simple-message :level pri :description input))
     (hash-table (make-instance 'structured-message :level pri :payload input))
     (property-list (make-instance 'structured-message :level pri :payload input))
-    (association-list (make-instance 'structured-message :level pri :payload input))))
+    (association-list (make-instance 'structured-message :level pri :payload input))
+    (otherwise (signal 'type-error "message conversion"))))
 
-(defmethod loggable-p ((message base-message) (threshold priority))
-  (and 
-   (conditional message)
-   (over-threshold (level message) threshold)
-   (or
-    (> (length (description message)) 0)
-    (payload message))))
+(defmethod loggable-p :around ((message base-message) (threshold priority))
+  (when
+      (and
+       (conditional message)
+       (priority>= (level message) threshold))
+    (call-next-method)))
+
+(defmethod loggable-p ((message structured-message) (threshold priority))
+  (let ((data (payload message)))
+    (and data
+	(typecase data
+	  (hash-table (<= 1 (hash-table-count data)))
+	  (property-list (<= 1 (length data)))
+	  (association-list (<= 1 (length data)))))))
+
+(defmethod loggable-p ((message simple-message) (threshold priority))
+  (let ((msg (description message)))
+    (and msg (not (string= "" msg)))))
 
 (defun export-message-p (message)
   "Returns true if the message object implements has an applicable message implementation."
@@ -127,12 +142,11 @@
   (description message))
 
 (defmethod resolve-output (formater (message structured-message))
-  (string-right-trim 
-   '(#\Space #\Tab #\Newline) 
+  (string-right-trim
+   '(#\Space #\Tab #\Newline)
    (with-output-to-string (out)
      (let ((payload (payload message)))
        (typecase payload
 	 (hash-table (maphash (lambda (k v) (format out "~A='~A' " k v)) payload))
-	 (property-list (loop for (k v) on '(:a "bar" :b "foo") by #'cddr do (format out "~A='~A' " (string-downcase (symbol-name k)) v)))
+	 (property-list (loop for (k v) on payload by #'cddr do (format out "~A='~A' " (string-downcase (symbol-name k)) v)))
 	 (association-list (loop for pair on payload do (format out "~A='~A' " (caar pair) (cdar pair)))))))))
- 

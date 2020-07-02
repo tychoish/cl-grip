@@ -1,10 +1,10 @@
 (defpackage grip.level
   (:use :cl)
   (:export :priority
-	   :over-threshold-p
 	   :priority-string
-	   :+trace+
+	   :priority>=
 	   :+debug+
+	   :+trace+
 	   :+info+
 	   :+notice+
 	   :+warning+
@@ -22,20 +22,29 @@
   (:documentation "defines a log level or priority to be associated
   with messages"))
 
-(defgeneric over-threshold-p (level threshold))
+(defgeneric priority>= (level threshold)
+  (:documentation "implements a greater than or equal to comparison
+  for priority objects, as well as comparisons between numbers
+  priority objects."))
 
-(defmethod over-threshold-p ((level priority) (threshold priority))
+(defmethod priority>= ((level priority) (threshold priority))
   (>= (value level) (value threshold)))
 
-(defconstant +trace+ (make-instance 'priority :value 20))
-(defconstant +debug+ (make-instance 'priority :value 30))
-(defconstant +info+ (make-instance 'priority :value 40))
-(defconstant +notice+ (make-instance 'priority :value 50))
-(defconstant +warning+ (make-instance 'priority :value 60))
-(defconstant +error+ (make-instance 'priority :value 70))
-(defconstant +critical+ (make-instance 'priority :value 80))
-(defconstant +alert+ (make-instance 'priority :value 90))
-(defconstant +emergency+ (make-instance 'priority :value 100))
+(defmethod priority>= ((level number) (threshold priority))
+  (>= level (value threshold)))
+
+(defmethod priority>= ((level priority) (threshold number))
+  (>= (value level) threshold))
+
+(defparameter +trace+ (make-instance 'priority :value 20))
+(defparameter +debug+ (make-instance 'priority :value 30))
+(defparameter +info+ (make-instance 'priority :value 40))
+(defparameter +notice+ (make-instance 'priority :value 50))
+(defparameter +warning+ (make-instance 'priority :value 60))
+(defparameter +error+ (make-instance 'priority :value 70))
+(defparameter +critical+ (make-instance 'priority :value 80))
+(defparameter +alert+ (make-instance 'priority :value 90))
+(defparameter +emergency+ (make-instance 'priority :value 100))
 
 (defgeneric priority-string (priority)
   (:documentation "returns the name of a priority level"))
