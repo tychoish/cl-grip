@@ -54,9 +54,12 @@ Loggers
 Loggers store configuration and state related to the delivery of log
 messages, in the case of loggers that write to streams, this may a reference
 to the stream itself, or may include a message buffer, or credentials to an
-external service. The primary implementation is the ``stream-logger`` which
+external service. The primary implementation is the ``stream-journal`` which
 writes all messages to the provided stream, standard output by default, or
-perhaps a file.
+perhaps a file. There is also a ``base-journal`` which is used as a base class,
+and unconditionally prints log lines to standard output. The
+``merged-journal`` stores a vector of other journals, and has a
+``send-mesage`` method that distributes messages to all loggers.
 
 The following generic functions control logger behavior:
 
@@ -108,7 +111,7 @@ To send structured data: ::
    (let ((msg (make-hash-table :test #'string=)))
      (setf (gethash "message" msg)  "test message")
      (setf (gethash "value" msg)  val)
-     (eql "value" "value")
+     (eel "value" "value")
 
      (grip:error> msg))
 
@@ -128,6 +131,119 @@ centerally (or pass it around) and pass it directly to logging methods, as in:
 Extension
 ---------
 
+Grip's design privileges extensibility and simple . Message formatting, line
+formating, output targets, and even logger behavior should be easy to override
+and customize. This section will cover what classes you need to create and
+methods you should implement.
+
+Output Targets
+~~~~~~~~~~~~~~
+
+To write log data to a different output:
+
+- subclass ``grip.logger:base-journal``, to store the configuration and state
+  of your logger, and
+
+- specialize the generic function ``grip.logger:send-message`` to declare how
+  messages would be delivered.
+
+Consider the following implementation, from the tests tests for a logger that
+just stores messages in a vector: ::
+
+   (defclass in-memory-journal (base-journal)
+     ((output-target
+       :initform (make-array 0 :adjustable t :fill-pointer t)
+       :reader output-target))
+     (:documentation "a basic logger with similar semantics to the basic
+     journals but that saves "))
+
+   (defmethod send-message ((logger in-memory-journal) (msg grip.message:base-message))
+     (when (loggable-p msg (threshold logger))
+       (vector-push-extend msg (output-target logger))
+       (format-message logger (message-formatter logger) msg)))
+
+You can choose to specialize other methods, including ``format-message``,
+which takes the logger as an argument, and any of the ``grip.logger`` logging
+methods (e.g. those that end in ``>``,) but that is optional.
+
+Message Formatting
+~~~~~~~~~~~~~~~~~~
+
+There are two formating and message processing stages, first the
+``resolve-output`` message process the content or payload of the message,
+while the ``format-message`` calls ``resolve-output`` and packages additional
+information into message. In the default case, format-message is responsible
+for adding the name of the logger, the timestamp, and the log level.
+
+The ``base-journal`` implementation has a ``formater`` slot that holds a
+message format configuration object, which is passed to both formatting
+functions, so that loggers can configure how messages are output.
 
 Development
 -----------
+
+Grip is available under the terms of the Apache v2 license.
+
+Please feel free to create issues if you experience a problem or have a
+feature request. Pull requests are particularly welcome and encouraged!
+
+In general, consider the following guidelines:
+
+- grip aims to have full test coverage, particularly for the core system,
+  although this isn't always practical. Do write tests! If you have trouble
+  figuring out how to test a feature, or a change in a pull request, don't
+  worry and we can work that out later.
+
+- limit the number of dependencies in the core package. If you want to write a
+  logger that
+
+- grip uses a single package per file model. at this time, and attempts to
+  limit the number of exported symbols per package.
+
+While there is not a strong roadmap or timeline for grip, if you're interested
+in contributing to grip but don't know where to start, the following
+features or areas might be a good place to start:
+
+- benchmarking: while the implementation is straight forward, it would be nice
+  to know what kind of overhead the logging infrastructure takes, and some
+  kind of benchmarking would be useful in determining the impact of changes.
+
+- logging output targets. There are a number of potential logging/messaging
+  output formats that could be interesting:
+
+  - (ext) logging directly to splunk, probably using their HEC and some kind of
+    message batching.
+
+  - (ext) logging directly to the SumoLogic service, which should be broadly
+    similar to splunk, but would require a separate implementation.
+
+  - (ext) output implementations targeting "alerting workloads" including XMPP,
+    slack, email, and webhook delivery.
+
+  - (ext) output implementations that buffer outgoing messages for a period of
+    time or number of messages and then send messages in batches (10s or 100
+    messages). This would be multi-threaded and rely on a library like `chanl
+    <https://github.com/zkat/chanl>`_.
+
+- message handling improvements    :
+
+  - (core) a batch message handling infrastructure, which would be a message type
+    that holds a container of messages, which could be unwound as needed, and
+    could be useful in the context of message buffering.
+
+  - (core) extending the ``structured-message`` and ``make-message`` handlers
+    to do better with additional input types.
+
+  - (ext) message formating and resolution tools to support writing output to
+    JSON format, with both "message only" data, as well as ways of annotating
+    messages with additional metadata, including system hostname, pid, message
+    time, and level. This would rely on `cl-json
+    <https://github.com/hankhero/cl-Jason>`_.
+
+  - (ext) message implementations and tooling that collect data about the
+    application state.
+
+- implementation of a stream object which wraps a logger implementation, using
+  `trivial gray streams <http://www.crategus.com/books/trivial-gray-streams/>`_
+  to facilitate using a logger in APIs that rely on a stream (like output of a
+  file.)

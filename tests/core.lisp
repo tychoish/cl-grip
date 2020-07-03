@@ -108,12 +108,12 @@
 
 (defclass in-memory-journal (base-journal)
   ((output-target
-    :initform (make-array 1 :adjustable t)
+    :initform (make-array 0 :adjustable t :fill-pointer t)
     :reader output-target))
   (:documentation "a basic logger with similar semantics to the basic
   journals but that saves "))
 
-(defmethod send-message ((logger in-memory-journal) (msg base-message))
+(defmethod send-message ((logger in-memory-journal) (msg grip.message:base-message))
   (when (loggable-p msg (threshold logger))
     (vector-push-extend msg (output-target logger))
     (format-message logger (message-formatter logger) msg)))
@@ -134,6 +134,85 @@
 			       (ok (search (priority-string level) (log> target level msg)))
 			       (ok (not (log> target (make-instance 'priority :value (- 10 (grip.level::value level))) msg)))
 			       (ok (search "hello world" (log> target level msg)))))))
+  (testing "merge loggers"
+    (testing "combine simple"
+      (let ((merge (make-instance 'merged-journal))
+	    (one (make-instance 'in-memory-journal))
+	    (two (make-instance 'in-memory-journal)))
+
+	(ok (= 0 (length (output-target one))))
+	(ok (= 0 (length (output-target two))))
+
+	(ok (= 0 (length (output-target merge))))
+
+	(merge-journals merge one)
+	(ok (= 1 (length (output-target merge))))
+
+	(merge-journals merge two)
+	(ok (= 2 (length (output-target merge))))
+
+	(info> merge "hi")
+
+	(ok (= 1 (length (output-target one))))
+	(ok (= 1 (length (output-target two)))))))
+
+  (testing "merge peers"
+    (let* ((one (make-instance 'in-memory-journal))
+	   (two (make-instance 'in-memory-journal))
+	   (merged (merge-journals one two)))
+
+      (ok (= 2 (length (output-target merged))))
+      (ok (= 0 (length (output-target one))))
+      (ok (= 0 (length (output-target two))))
+
+      (info> merged "hi")
+      (info> merged "hi")
+      (info> merged "hi")
+      (ok (= 3 (length (output-target one))))
+      (ok (= 3 (length (output-target two))))))
+
+  (testing "reverse merge"
+    (let* ((merged (make-instance 'merged-journal))
+	   (one (make-instance 'in-memory-journal))
+	   (two (make-instance 'in-memory-journal)))
+
+      (merge-journals one merged)
+      (merge-journals two merged)
+
+      (ok (= 2 (length (output-target merged))))
+      (ok (= 0 (length (output-target one))))
+      (ok (= 0 (length (output-target two))))
+
+      (info> merged "hi")
+      (info> merged "hi")
+      (info> merged "hi")
+      (ok (= 3 (length (output-target one))))
+      (ok (= 3 (length (output-target two))))))
+
+  (testing "double"
+    (let* ((merged-one (make-instance 'merged-journal))
+	   (merged-two (make-instance 'merged-journal))
+	   (one (make-instance 'in-memory-journal))
+	   (two (make-instance 'in-memory-journal))
+	   (three (make-instance 'in-memory-journal))
+	   (four (make-instance 'in-memory-journal)))
+
+      (merge-journals merged-one one)
+      (merge-journals merged-one two)
+      (merge-journals merged-two three)
+      (merge-journals merged-two four)
+
+      (let ((merged (merge-journals merged-one merged-two)))
+	(ok (= 4 (length (output-target merged))))
+
+	(info> merged "hi")
+	(info> merged "hi")
+	(info> merged "hi")
+	(ok (= 3 (length (output-target one))))
+	(ok (= 3 (length (output-target two))))
+	(ok (= 3 (length (output-target three))))
+	(ok (= 3 (length (output-target four)))))))
+
   (testing "level methods"
     (loop for target in (list (make-instance 'base-journal) (make-instance 'stream-journal) (make-instance 'in-memory-journal))
 	  do

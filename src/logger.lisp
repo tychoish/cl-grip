@@ -7,14 +7,17 @@
 	   ;; processes
 	   :format-message
 	   :send-message
-	   ;; the default logging implementation and its accessors
+	   ;; the default logging implementation and its accesses
 	   :stream-journal
 	   :base-journal
 	   :in-memory-journal
+	   :merged-journal
+	   ;; logger interface
 	   :name
 	   :threshold
 	   :output-target
 	   :message-formatter
+	   :merge-journals
 	   ;; logging function
 	   :log>
 	   :trace>
@@ -25,8 +28,10 @@
 	   :error>
 	   :critical>
 	   :alert>
-	   :emergency>))
-
+	   :emergency>)
+  (:documentation "Logger contains basic implementation of logging
+  implementations 'journal' with limited external dependencies, and
+  related interface."))
 (in-package :grip.logger)
 
 (defgeneric format-message (logger formatter message)
@@ -79,6 +84,38 @@
 (defmethod send-message ((logger base-journal) (msg base-message))
   (when (loggable-p msg (threshold logger))
     (write-line (format-message logger (message-formatter logger) msg) *standard-output*)))
+
+(defclass merged-journal (base-journal)
+  ((output-target
+    :initform (make-array 0 :element-type 'base-journal :adjustable t :fill-pointer 0)
+    :accessor output-target))
+  (:documentation "a journal implementation that dispatches messages
+  to more than one output for every message sent"))
+
+(defgeneric merge-journals (journal-one journal-two)
+  (:documentation "takes two journals and combines or merges them into
+  a single stream, as best as possible"))
+
+(defmethod merge-journals ((base merged-journal) (second merged-journal))
+  (loop for journal across (output-target second)
+	do (merge-journals base journal))
+  base)
+
+(defmethod merge-journals ((second base-journal) (base merged-journal))
+  (merge-journals base second))
+
+(defmethod merge-journals ((first base-journal) (second base-journal))
+  (let ((out (make-instance 'merged-journal)))
+    (vector-push-extend first (output-target out))
+    (vector-push-extend second (output-target out))
+    out))
+
+(defmethod merge-journals ((base merged-journal) (logger base-journal))
+  (vector-push-extend logger (output-target base)))
+
+(defmethod send-message ((logger merged-journal) (msg base-message))
+  (loop for journal across (output-target logger)
+	do (send-message journal msg)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -164,4 +201,3 @@
   implementations. The default implementation wraps 'log'.")
   (:method (logger message)
     (log> logger grip.level:+emergency+ message)))
-
