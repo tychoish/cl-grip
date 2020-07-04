@@ -19,7 +19,7 @@
   :description "Extensions and tools built on top of core grip interfaces."
   :author "Sam Kleinman <sam@tychoish.com>"
   :license  "Apache v2"
-  :depends-on ("local-time" "cl-json" "chanl")
+  :depends-on ("local-time" "local-time-duration" "cl-json" "chanl")
   :components ((:module "ext"
 		:components
 		((:file "buffer")

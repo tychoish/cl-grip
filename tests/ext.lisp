@@ -69,3 +69,8 @@
 	  (ok (search "time" output))
 	  (ok (search "message" output))
 	  (ok (search "hello world!" output)))))))))
+
+(deftest buffered
+  (testing "journal initialization")
+  (testing "journal setup")
+  (testing "flushing"))
