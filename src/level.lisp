@@ -2,6 +2,7 @@
   (:use :cl)
   (:export :priority
 	   :priority-string
+	   :priority-value
 	   :priority>=
 	   :make-priority
 	   :+debug+
@@ -18,7 +19,7 @@
 (defclass priority ()
   ((value
     :type integer
-    :reader value
+    :reader priority-value
     :initarg :value))
   (:documentation "defines a log level or priority to be associated
   with messages"))
@@ -29,13 +30,13 @@
   priority objects."))
 
 (defmethod priority>= ((level priority) (threshold priority))
-  (>= (value level) (value threshold)))
+  (>= (priority-value level) (priority-value threshold)))
 
 (defmethod priority>= ((level number) (threshold priority))
-  (>= level (value threshold)))
+  (>= level (priority-value threshold)))
 
 (defmethod priority>= ((level priority) (threshold number))
-  (>= (value level) threshold))
+  (>= (priority-value level) threshold))
 
 (defparameter +trace+ (make-instance 'priority :value 20))
 (defparameter +debug+ (make-instance 'priority :value 30))
@@ -51,7 +52,7 @@
   (:documentation "returns the name of a priority level"))
 
 (defmethod priority-string ((level priority))
-  (let* ((val (value level))
+  (let* ((val (priority-value level))
 	 (remainder (mod val 10))
 	 (resolved (string-for-level (- val remainder))))
     (if (= remainder 0)

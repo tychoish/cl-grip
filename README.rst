@@ -234,11 +234,11 @@ features or areas might be a good place to start:
   - (core) extending the ``structured-message`` and ``make-message`` handlers
     to do better with additional input types.
 
-  - (ext) message formating and resolution tools to support writing output to
-    JSON format, with both "message only" data, as well as ways of annotating
-    messages with additional metadata, including system hostname, pid, message
-    time, and level. This would rely on `cl-json
-    <https://github.com/hankhero/cl-Jason>`_.
+  - (ext) improve the automatic metadata collection and population for
+    structured messages, both during message collection and also by
+    configuring formatters.
+    
+  - (core) provide easier helpers for creating arbitrary structured messages.
 
   - (ext) message implementations and tooling that collect data about the
     application state.

@@ -8,15 +8,15 @@
 
 (deftest level
   (testing "definition"
-    (ok (= (grip.level::value +trace+) 20))
-    (ok (= (grip.level::value +debug+) 30))
-    (ok (= (grip.level::value +info+) 40))
-    (ok (= (grip.level::value +notice+) 50))
-    (ok (= (grip.level::value +warning+) 60))
-    (ok (= (grip.level::value +error+) 70))
-    (ok (= (grip.level::value +critical+) 80))
-    (ok (= (grip.level::value +alert+) 90))
-    (ok (= (grip.level::value +emergency+) 100)))
+    (ok (= (grip.level:priority-value +trace+) 20))
+    (ok (= (grip.level:priority-value +debug+) 30))
+    (ok (= (grip.level:priority-value +info+) 40))
+    (ok (= (grip.level:priority-value +notice+) 50))
+    (ok (= (grip.level:priority-value +warning+) 60))
+    (ok (= (grip.level:priority-value +error+) 70))
+    (ok (= (grip.level:priority-value +critical+) 80))
+    (ok (= (grip.level:priority-value +alert+) 90))
+    (ok (= (grip.level:priority-value +emergency+) 100)))
   (testing "interval string values"
     (ok (string= "trace" (priority-string +trace+)))
     (ok (string= "debug" (priority-string +debug+)))
@@ -37,7 +37,7 @@
     (ok (string= "9001" (grip.level::string-for-level 9001))))
   (testing "constructor"
     (ok (eq +info+ (make-priority +info+)))
-    (ok (equal 70 (grip.level::value (make-priority 70)))))
+    (ok (equal 70 (grip.level:priority-value (make-priority 70)))))
   (testing "priority greater than or equal"
     (testing "two priority values"
       (ok (priority>= +alert+ +error+))
@@ -105,7 +105,6 @@
 	(setf (gethash "b" ht) 2)
       (ok (string= "a='one' b='2'" (resolve-output nil (make-instance 'structured-message :payload ht))))))))
 
-
 (defclass in-memory-journal (base-journal)
   ((output-target
     :initform (make-array 0 :adjustable t :fill-pointer t)
@@ -132,7 +131,7 @@
 		      (loop for msg in (list "hello world" (make-instance 'simple-message :description "hello world"))
 			    do
 			       (ok (search (priority-string level) (log> target level msg)))
-			       (ok (not (log> target (make-instance 'priority :value (- 10 (grip.level::value level))) msg)))
+			       (ok (not (log> target (make-instance 'priority :value (- 10 (grip.level:priority-value level))) msg)))
 			       (ok (search "hello world" (log> target level msg)))))))
   (testing "merge loggers"
     (testing "combine simple"

@@ -22,8 +22,7 @@
   :depends-on ("local-time" "cl-json" "chanl")
   :components ((:module "ext"
 		:components
-		((:file "multi")
-		 (:file "buffer")
+		((:file "buffer")
 		 (:file "json")))))
 
 (defsystem "cl-grip/tests"
@@ -32,7 +31,8 @@
   :license  "Apache v2"
   :description "test system for cl-grip"
   :perform (test-op (op c) (symbol-call :rove :run c))
-  :depends-on ("cl-grip" "rove")
+  :depends-on ("cl-grip" "cl-grip/ext" "rove")
   :components ((:module "tests"
 		:components
-		((:file "core")))))
+		((:file "core")
+		 (:file "ext")))))
