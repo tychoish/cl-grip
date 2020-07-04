@@ -58,7 +58,7 @@
       (ok (not (priority>= +alert+ 400)))
       (ok (not (priority>= +error+ 80))))))
 
-(deftest message
+(deftest base-message
   (testing "conversion"
     (testing "export"
       (defmethod export-message ((fmt basic-formatter))
@@ -71,10 +71,10 @@
       (ok (signals (make-message +info+ 1)))
       (ok (signals (make-message +info+ +trace+))))
     (testing "passthrough"
-      (let* ((msg (make-instance 'simple-message :level +info+ :description "hi"))
+      (let* ((msg (make-instance 'simple-message :level +info+ :payload "hi"))
 	     (converted (make-message +alert+ msg)))
 	(ok (eq msg converted))
-	(ok (eq +alert+ (level msg))))))
+	(ok (eq +alert+ (message-level msg))))))
 
   (testing "logable checks"
     (testing "simple"
@@ -89,14 +89,14 @@
 	(setf (gethash "hi" ht) "foo")
 	(ok (loggable-p (make-message +info+ ht) +info+))))
     (testing "conditional logging"
-      (ok (not (loggable-p (make-instance 'simple-message :level +alert+ :description "hi" :when nil) +info+))))
+      (ok (not (loggable-p (make-instance 'simple-message :level +alert+ :payload "hi" :when nil) +info+))))
     (testing "zero values are not loggable"
       (ok (not (loggable-p (make-message +info+ nil) +info+)))
       (ok (not (loggable-p (make-message +info+ "") +info+)))))
 
   (testing "output"
     (testing "simple"
-      (ok (string= "hi" (resolve-output nil (make-instance 'simple-message :description "hi")))))
+      (ok (string= "hi" (resolve-output nil (make-instance 'simple-message :payload "hi")))))
     (testing "structured"
       (ok (string= "a='one' b='2'" (resolve-output nil (make-instance 'structured-message :payload '(:a "one" :b 2)))))
       (ok (string= "a='one' b='2'" (resolve-output nil (make-instance 'structured-message :payload '(("a" . "one") ("b" . 2))))))
@@ -104,6 +104,87 @@
 	(setf (gethash "a" ht) "one")
 	(setf (gethash "b" ht) 2)
       (ok (string= "a='one' b='2'" (resolve-output nil (make-instance 'structured-message :payload ht))))))))
+
+(deftest batch-message
+  (testing "loggable"
+    (ok (not (loggable-p (make-instance 'batch-message :level +info+) +info+)))
+    (let ((batch (make-instance 'batch-message :level +info+)))
+      (merge-messages batch (make-message +info+ "hi there"))
+    (ok (loggable-p batch +info+))
+    (ok (not (loggable-p batch +alert+))))
+
+    (let ((batch (make-instance 'batch-message :level +debug+)))
+      (merge-messages batch (make-message +info+ "hi there"))
+      (ok (not (loggable-p batch +info+)))
+      (ok (loggable-p batch +trace+))
+      (setf (message-conditional batch) nil)
+      (ok (not (loggable-p batch +trace+)))))
+
+  (testing "set level"
+    (testing "override"
+      (let ((batch (make-instance 'batch-message :level +info+)))
+	(loop repeat 5 do
+	  (let ((m (make-instance 'simple-message :payload "hi there")))
+	    (ok (not (message-level m)))
+	    (merge-messages batch m)))
+	(ok (= 5 (length (message-batch batch))))
+	(setf (message-level batch) +error+)
+
+	(loop for m across (message-batch batch) do
+	  (ok (= 70  (priority-value (message-level m))))))))
+
+    (testing "noop"
+      (let ((batch (make-instance 'batch-message :level +info+)))
+	(loop repeat 5 do
+	  (let ((m (make-instance 'simple-message :level +info+ :payload "hi there")))
+	    (ok (message-level m))
+	    (merge-messages batch m)))
+	(ok (= 5 (length (message-batch batch))))
+	(setf (message-level batch) +error+)
+
+	(loop for m across (message-batch batch) do
+	  (ok (= 40  (priority-value (message-level m)))))))
+
+  (testing "create batch"
+    (testing "merge two base"
+      (let* ((one (make-message +info+ "hi"))
+	     (two (make-message +info+ "there"))
+	     (merged (merge-messages one two)))
+	(ok (typep merged 'batch-message))
+	(ok (= 2 (length (message-batch merged))))))
+    (testing "merge into first"
+      (let* ((merged (make-instance 'batch-message))
+	     (one (make-message +info+ "hi"))
+	     (two (make-message +info+ "there")))
+	(ok (= 0 (length (message-batch merged))))
+	(merge-messages merged one)
+	(ok (= 1 (length (message-batch merged))))
+	(merge-messages merged two)
+	(ok (= 2 (length (message-batch merged))))))
+    (testing "merge into second"
+      (let* ((merged (make-instance 'batch-message))
+	     (one (make-message +info+ "hi"))
+	     (two (make-message +info+ "there")))
+	(ok (= 0 (length (message-batch merged))))
+	(merge-messages one merged)
+	(ok (= 1 (length (message-batch merged))))
+	(merge-messages two merged)
+	(ok (= 2 (length (message-batch merged))))))
+    (testing "merge two batch"
+      (let ((one (make-instance 'batch-message))
+	     (two (make-instance 'batch-message))
+	     (sub-one (make-message +info+ "one"))
+	     (sub-two (make-message +info+ "two"))
+	     (sub-three (make-message +info+ "three"))
+	     (sub-four (make-message +info+ "four")))
+
+	(merge-messages one sub-one)
+	(merge-messages one sub-two)
+	(merge-messages one sub-three)
+	(merge-messages two sub-four)
+	(let ((merged (merge-messages two one)))
+	  (ok (eq merged one)))
+	(ok (= 4 (length (message-batch one))))))))
 
 (defclass in-memory-journal (base-journal)
   ((output-target
@@ -128,7 +209,7 @@
 	  do
 	     (loop for level in (list +info+ +notice+ +warning+ +error+ +alert+ +critical+ +emergency+)
 		   do
-		      (loop for msg in (list "hello world" (make-instance 'simple-message :description "hello world"))
+		      (loop for msg in (list "hello world" (make-instance 'simple-message :payload "hello world"))
 			    do
 			       (ok (search (priority-string level) (log> target level msg)))
 			       (ok (not (log> target (make-instance 'priority :value (- 10 (grip.level:priority-value level))) msg)))
@@ -237,7 +318,16 @@
 	     (ok (search "hello world" (alert> target "hello world")))
 
 	     (ok (search "emergency" (emergency> target "hello world")))
-	     (ok (search "hello world" (emergency> target "hello world"))))))
+	     (ok (search "hello world" (emergency> target "hello world")))))
+  (testing "batches"
+    (let* ((logger (make-instance 'in-memory-journal))
+	   (one (make-message +info+ "hi"))
+	   (two (make-message +info+ "there"))
+	   (merged (merge-messages one two)))
+      (ok (= 2 (length (message-batch merged))))
+      (info> logger merged)
+      (ok (= 2 (length (output-target logger))))
+      (length (output-target logger)))))
 
 (defun with-tmp-logger (tmp-logger function)
   (let ((std grip:*default-logger*))
@@ -255,9 +345,9 @@
 	   (output (vector-pop (output-target logger))))
       (ok (search "hi there" expected))
       (ok (search "mem" expected))
-      (ok (eq +info+ (level output)))
+      (ok (eq +info+ (message-level output)))
       (ok (search "info" expected))
-      (ok (string= "hi there" (description output)))))
+      (ok (string= "hi there" (message-payload output)))))
 
   (testing "trace"
     (let* ((logger (make-instance 'in-memory-journal :threshold (make-instance 'priority :value 0) :name "mem"))
@@ -265,9 +355,9 @@
 	   (output (vector-pop (output-target logger))))
       (ok (search "hi there" expected))
       (ok (search "mem" expected))
-      (ok (eq +trace+ (level output)))
+      (ok (eq +trace+ (message-level output)))
       (ok (search "trace" expected))
-      (ok (string= "hi there" (description output)))))
+      (ok (string= "hi there" (message-payload output)))))
 
   (testing "debug"
     (let* ((logger (make-instance 'in-memory-journal :threshold (make-instance 'priority :value 0) :name "mem"))
@@ -275,9 +365,9 @@
 	   (output (vector-pop (output-target logger))))
       (ok (search "hi there" expected))
       (ok (search "mem" expected))
-      (ok (eq +debug+ (level output)))
+      (ok (eq +debug+ (message-level output)))
       (ok (search "debug" expected))
-      (ok (string= "hi there" (description output)))))
+      (ok (string= "hi there" (message-payload output)))))
 
   (testing "info"
     (let* ((logger (make-instance 'in-memory-journal :threshold (make-instance 'priority :value 0) :name "mem"))
@@ -285,9 +375,9 @@
 	   (output (vector-pop (output-target logger))))
       (ok (search "hi there" expected))
       (ok (search "mem" expected))
-      (ok (eq +info+ (level output)))
+      (ok (eq +info+ (message-level output)))
       (ok (search "info" expected))
-      (ok (string= "hi there" (description output)))))
+      (ok (string= "hi there" (message-payload output)))))
 
   (testing "notice"
     (let* ((logger (make-instance 'in-memory-journal :threshold (make-instance 'priority :value 0) :name "mem"))
@@ -295,9 +385,9 @@
 	   (output (vector-pop (output-target logger))))
       (ok (search "hi there" expected))
       (ok (search "mem" expected))
-      (ok (eq +notice+ (level output)))
+      (ok (eq +notice+ (message-level output)))
       (ok (search "notice" expected))
-      (ok (string= "hi there" (description output)))))
+      (ok (string= "hi there" (message-payload output)))))
 
   (testing "warning"
     (let* ((logger (make-instance 'in-memory-journal :threshold (make-instance 'priority :value 0) :name "mem"))
@@ -305,9 +395,9 @@
 	   (output (vector-pop (output-target logger))))
       (ok (search "hi there" expected))
       (ok (search "mem" expected))
-      (ok (eq +warning+ (level output)))
+      (ok (eq +warning+ (message-level output)))
       (ok (search "warning" expected))
-      (ok (string= "hi there" (description output)))))
+      (ok (string= "hi there" (message-payload output)))))
 
   (testing "error"
     (let* ((logger (make-instance 'in-memory-journal :threshold (make-instance 'priority :value 0) :name "mem"))
@@ -315,9 +405,9 @@
 	   (output (vector-pop (output-target logger))))
       (ok (search "hi there" expected))
       (ok (search "mem" expected))
-      (ok (eq +error+ (level output)))
+      (ok (eq +error+ (message-level output)))
       (ok (search "error" expected))
-      (ok (string= "hi there" (description output)))))
+      (ok (string= "hi there" (message-payload output)))))
 
   (testing "critical"
     (let* ((logger (make-instance 'in-memory-journal :threshold (make-instance 'priority :value 0) :name "mem"))
@@ -325,9 +415,9 @@
 	   (output (vector-pop (output-target logger))))
       (ok (search "hi there" expected))
       (ok (search "mem" expected))
-      (ok (eq +critical+ (level output)))
+      (ok (eq +critical+ (message-level output)))
       (ok (search "critical" expected))
-      (ok (string= "hi there" (description output)))))
+      (ok (string= "hi there" (message-payload output)))))
 
   (testing "alert"
     (let* ((logger (make-instance 'in-memory-journal :threshold (make-instance 'priority :value 0) :name "mem"))
@@ -335,9 +425,9 @@
 	   (output (vector-pop (output-target logger))))
       (ok (search "hi there" expected))
       (ok (search "mem" expected))
-      (ok (eq +alert+ (level output)))
+      (ok (eq +alert+ (message-level output)))
       (ok (search "alert" expected))
-      (ok (string= "hi there" (description output)))))
+      (ok (string= "hi there" (message-payload output)))))
 
   (testing "emergency"
     (let* ((logger (make-instance 'in-memory-journal :threshold (make-instance 'priority :value 0) :name "mem"))
@@ -345,8 +435,8 @@
 	   (output (vector-pop (output-target logger))))
       (ok (search "hi there" expected))
       (ok (search "mem" expected))
-      (ok (eq +emergency+ (level output)))
+      (ok (eq +emergency+ (message-level output)))
       (ok (search "emergency" expected))
-      (ok (string= "hi there" (description output)))))
+      (ok (string= "hi there" (message-payload output)))))
 
   (ok (string= (string-upcase "base-journal") (type-of grip:*default-logger*))))

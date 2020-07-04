@@ -73,17 +73,22 @@
   (format nil
 	  "[~A] ~A [p=~A] ~A"
 	   (name logger)
-	   (format-timestring nil (timestamp msg) :format (timestamp-format fmt))
-	   (grip.level:priority-string (level msg))
+	   (format-timestring nil (message-timestamp msg) :format (format-timestamp fmt))
+	   (grip.level:priority-string (message-level msg))
 	   (resolve-output fmt msg)))
 
 (defmethod send-message ((logger stream-journal) (msg base-message))
   (when (loggable-p msg (threshold logger))
     (write-line (format-message logger (message-formatter logger) msg) (output-target logger))))
 
-(defmethod send-message ((logger base-journal) (msg base-message))
+(defmethod send-message (logger (msg base-message))
   (when (loggable-p msg (threshold logger))
     (write-line (format-message logger (message-formatter logger) msg) *standard-output*)))
+
+(defmethod send-message :around (logger (batch batch-message))
+  (map nil (lambda (message)
+	     (send-message logger message))
+       (message-batch batch)))
 
 (defclass merged-journal (base-journal)
   ((output-target

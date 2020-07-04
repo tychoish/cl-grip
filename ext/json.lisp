@@ -20,10 +20,10 @@
   hierarchy and should not be exported or used externally."))
 
 (defmethod resolve-output ((fmt json-base-formatter) (message grip.message:simple-message))
-  (grip.message:description message))
+  (grip.message:message-payload message))
 
 (defmethod resolve-output ((fmt json-base-formatter) (message grip.message:structured-message))
-  (grip.message:payload message))
+  (grip.message:message-payload message))
 
 (defclass json-metadata-formatter (json-base-formatter)
   ()
@@ -41,8 +41,8 @@
 
 (defmethod format-message ((logger base-journal) (fmt json-metadata-formatter) (message grip.message:structured-message))
   (let ((data (resolve-output fmt message))
-	(ts (local-time:format-timestring nil (grip.message:timestamp message) :format local-time:+rfc3339-format+))
-	(level (grip.level:priority-value (grip.message:level message)))
+	(ts (local-time:format-timestring nil (grip.message:message-timestamp message) :format local-time:+rfc3339-format+))
+	(level (grip.level:priority-value (grip.message:message-level message)))
 	(logger-name (name logger)))
     (typecase data
       (hash-table
@@ -68,8 +68,8 @@
 	 (cl-json:encode-json-alist-to-string data))))))
 
 (defmethod format-message ((logger base-journal) (fmt json-metadata-formatter) (message grip.message:simple-message))
-  (let ((ts (local-time:format-timestring nil (grip.message:timestamp message) :format local-time:+rfc3339-format+))
-	(level (grip.level:priority-value (grip.message:level message)))
+  (let ((ts (local-time:format-timestring nil (grip.message:message-timestamp message) :format local-time:+rfc3339-format+))
+	(level (grip.level:priority-value (grip.message:message-level message)))
 	(logger-name (name logger))
 	(mdal '())
 	(data '()))
