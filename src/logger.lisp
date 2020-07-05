@@ -37,6 +37,9 @@
 (defgeneric format-message (logger formatter message)
   (:documentation "implement format-message to control message output"))
 
+(defgeneric send-message (logger message)
+  (:documentation "fundamental mesage sending method."))
+
 (defclass base-journal ()
   ((name
     :initform "grip"
@@ -81,7 +84,7 @@
   (when (loggable-p msg (threshold logger))
     (write-line (format-message logger (message-formatter logger) msg) (output-target logger))))
 
-(defmethod send-message (logger (msg base-message))
+(defmethod send-message ((logger base-journal) (msg base-message))
   (when (loggable-p msg (threshold logger))
     (write-line (format-message logger (message-formatter logger) msg) *standard-output*)))
 

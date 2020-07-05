@@ -1,7 +1,10 @@
 (defpackage test.grip.ext
   (:use :cl :rove
-	:grip.ext.json)
-  (:import-from :grip.logger :base-journal)
+	:grip.message
+	:grip.ext.json
+	:grip.ext.buffer)
+  (:import-from :local-time-duration :duration)
+  (:import-from :grip.logger :base-journal :send-message)
   (:import-from :grip.message :make-message)
   (:import-from :grip.level :+info+))
 (in-package :test.grip.ext)
@@ -70,7 +73,37 @@
 	  (ok (search "message" output))
 	  (ok (search "hello world!" output)))))))))
 
+(defclass in-memory-journal (base-journal)
+  ((output-target
+    :initform (make-array 10 :adjustable t :fill-pointer 0)
+    :reader output-target))
+  (:documentation "a basic logger with similar semantics to the basic
+  journals but that saves "))
+
+(defmethod send-message ((logger in-memory-journal) (msg base-message))
+  (when (loggable-p msg (grip.logger:threshold logger))
+    (vector-push-extend msg (output-target logger))
+    (grip.logger:format-message logger (grip.logger:message-formatter logger) msg)))
+
+
 (deftest buffered
-  (testing "journal initialization")
   (testing "journal setup")
   (testing "flushing"))
+
+(defun smoke-test-buffered-journal ()
+  (let* ((base (make-instance 'in-memory-journal))
+	 (journal (make-instance 'buffered-journal :journal base :size 1 :interval (duration :sec 1))))
+    (send-message journal (make-message +info+ "hi"))
+    (close-journal journal)
+
+    (assert (= 1 (length (output-target base))))
+    (length (output-target base)))
+
+  (let* ((base (make-instance 'in-memory-journal))
+	 (journal (make-instance 'buffered-journal :journal base :size 1 :interval (duration :sec 1))))
+    (grip.logger:log> journal +info+ "hello world!")
+    (close-journal journal)
+    (assert (= 1 (length (output-target base))))
+    (length (output-target base))))
+
+(smoke-test-buffered-journal)

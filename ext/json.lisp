@@ -1,5 +1,4 @@
 (defpackage grip.ext.json
-  (:nicknames :grip.json)
   (:use :cl)
   (:import-from :trivial-types
 		:association-list
@@ -7,6 +6,8 @@
   (:import-from :grip.logger
 		:base-journal
 		:name)
+  (:import-from :grip.message
+		:resolve-output)
   (:export :json-metadata-formatter
 	   :json-simple-formatter
 	   :format-message
@@ -37,7 +38,6 @@
   (:documentation "Provides a formating output that does to modify the
   data format with metadata, simple (string) messages have structures
   that resemble {'message': <value>}"))
-
 
 (defmethod format-message ((logger base-journal) (fmt json-metadata-formatter) (message grip.message:structured-message))
   (let ((data (resolve-output fmt message))

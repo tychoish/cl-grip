@@ -188,7 +188,7 @@
 
 (defclass in-memory-journal (base-journal)
   ((output-target
-    :initform (make-array 0 :adjustable t :fill-pointer t)
+    :initform (make-array 10 :adjustable t :fill-pointer 0)
     :reader output-target))
   (:documentation "a basic logger with similar semantics to the basic
   journals but that saves "))

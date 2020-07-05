@@ -1,8 +1,10 @@
 (defpackage grip.ext.buffer
-  (:nicknames :grip.buffer)
   (:use :cl)
   (:import-from :grip.logger
-		:base-journal)
+		:base-journal
+		:send-message)
+  (:import-from :grip.message
+		:base-message)
   (:import-from :local-time :now)
   (:import-from :local-time-duration
 		:duration
@@ -21,49 +23,19 @@
 		:kill)
   (:export :buffered-journal
 	   :send-message
-	   :flush-journal
 	   :close-journal))
 (in-package :grip.ext.buffer)
 
 (defclass buffered-journal (base-journal)
-  ((wrapped-journal
-    :type base-journal
-    :reader buffer-journal
-    :initarg :journal)
-   (buffer-chan
-    :type bounded-channel
-    :accessor buffer-chan
-    :initform nil)
-   (size
-    :type integer
-    :initarg :size
-    :initform 100
-    :accessor buffer-size)
-   (interval
-    :type duration
-    :initarg :interval
-    :initform (duration :sec 10)
-    :accessor buffer-interval)
-   (worker-send
-    :accessor buffer-worker
-    :type bt:thread
-    :initform nil)
-   (worker-timer
-    :accessor buffer-worker
-    :type bt:thread
-    :initform nil)
-   (flush-chan
-    :accessor buffer-flush
-    :type bounded-channel
-    :initform (make-instance 'bounded-channel :size 1))
-   (timer-chan
-    :accessor buffer-timer
-    :type bounded-channel
-    :initform (make-instance 'bounded-channel :size 1))
-   (signal-chan
-    :accessor buffer-signal
-    :type bounded-channel
-    :initform (make-instance 'bounded-channel :size 1)))
+  ((wrapped-journal :reader buffer-journal :initarg :journal :type base-journal)
+   (size :accessor buffer-size :initarg :size :type integer :initform 100)
+   (interval :accessor buffer-interval :initarg :interval :type duration :initform (duration :sec 10))
+   (worker-send :accessor buffer-message-worker :type bt:thread :initform nil)
+   (worker-timer :accessor buffer-timer-worker :type bt:thread :initform nil)
+   (buffer-chan :accessor buffer-chan :type bounded-channel :initform nil)
+   (flush-chan :accessor buffer-flush :type bounded-channel :initform (make-instance 'bounded-channel :size 1))
+   (timer-chan :accessor buffer-timer :type bounded-channel :initform (make-instance 'bounded-channel :size 1))
+   (signal-chan :accessor buffer-signal :type bounded-channel :initform (make-instance 'bounded-channel :size 1)))
   (:documentation "The buffered journal wraps another journal
   implementation and buffers the underlying implementation to send
   messages on a fixed interval or after a certain volume of
@@ -78,15 +50,18 @@
     (signal 'error "must specify journal to buffer"))
 
   (setf (buffer-chan journal) (make-instance 'bounded-channel :size (buffer-size journal)))
-  (setf (buffer-timer journal) (start-timer journal))
-  (setf (buffer-worker journal) (start-worker journal)))
+  (setf (buffer-timer-worker journal) (start-timer journal))
+  (setf (buffer-message-worker journal) (start-worker journal)))
 
 (defmethod setup-journal ((journal buffered-journal))
-  (unless (thread-alive-p (buffer-worker journal))
-    (setf (buffer-worker journal) (start-worker journal)))
+  (let ((timer-thread (buffer-timer-worker journal))
+	(message-thread (buffer-message-worker journal)))
 
-  (unless (thread-alive-p (buffer-timer journal))
-    (setf (buffer-timer journal) (start-timer journal))))
+    (unless (and message-thread (thread-alive-p message-thread))
+      (setf (buffer-message-worker journal) (start-worker journal)))
+
+    (unless (and timer-thread (thread-alive-p timer-thread))
+      (setf (buffer-timer-worker journal) (start-timer journal)))))
 
 (defmethod start-worker ((journal buffered-journal))
   (task-thread
@@ -95,12 +70,12 @@
 	(let ((buf (make-array (buffer-size journal) :adjustable t :fill-pointer 0)))
 	  (loop
 	    (select
-	      ((recv (buffer-flush journal) res) (flush-buffer journal buf) res)
+	      ((recv (buffer-flush journal) res) (flush-journal journal buf) res)
 	      ((recv (buffer-chan journal) message) (vector-push-extend message buf))
-	      ((recv (buffer-signal journal) res) (flush-buffer journal buf) (return-from nil res))
-	      ((recv (buffer-timer journal) res) (flush-buffer journal buf) res))
+	      ((recv (buffer-signal journal) res) (flush-journal journal buf) (return res))
+	      ((recv (buffer-timer journal) res) (flush-journal journal buf) res))
 	    (when (>= (fill-pointer buf) (buffer-size journal))
-	      (flush-buffer journal buf)))))
+	      (flush-journal journal buf)))))
     :name "grip.ext.buffered.worker")))
 
 (defmethod start-timer ((journal buffered-journal))
@@ -112,15 +87,21 @@
 	(send (buffer-timer journal) t)))
     :name "grip.ext.buffered.timer")))
 
-(defmethod flush-buffer ((journal buffered-journal) buf)
-  (unless (string= "grip.ext.buffered.worker" (thread-name (current-thread)))
-    (return-from flush-buffer (send (buffer-flush journal) t)))
-
+(defmethod flush-journal ((journal buffered-journal) buf)
   ;; otherwise we're in the worker and we should flush here
   (loop for message across buf do
-    (send-message journal message))
+    (send-message (buffer-journal journal) message))
   (setf (fill-pointer buf) 0))
 
 (defmethod close-journal ((journal buffered-journal))
   (send (buffer-signal journal) t)
-  (kill (buffer-timer journal)))
+
+  (let ((timer-thread (buffer-timer-worker journal))
+	(message-thread (buffer-message-worker journal)))
+
+    (when timer-thread
+      (kill timer-thread))
+
+    (when message-thread
+      (sleep 0.5) ;; this is just a kindness to allow the last flush to go through
+      (kill (buffer-message-worker journal)))))
