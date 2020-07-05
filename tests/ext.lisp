@@ -85,12 +85,9 @@
     (vector-push-extend msg (output-target logger))
     (grip.logger:format-message logger (grip.logger:message-formatter logger) msg)))
 
-
-(deftest buffered
-  (testing "journal setup")
-  (testing "flushing"))
-
 (defun smoke-test-buffered-journal ()
+  ;; a direct and simple test of the buffered logger itself, using the
+  ;; send-message method implemented here.
   (let* ((base (make-instance 'in-memory-journal))
 	 (journal (make-instance 'buffered-journal :journal base :size 1 :interval (duration :sec 1))))
     (send-message journal (make-message +info+ "hi"))
@@ -99,11 +96,37 @@
     (assert (= 1 (length (output-target base))))
     (length (output-target base)))
 
+  ;; test a case where we call in via the logging method directly,
+  ;; making sure that the higher level integration works.
   (let* ((base (make-instance 'in-memory-journal))
 	 (journal (make-instance 'buffered-journal :journal base :size 1 :interval (duration :sec 1))))
     (grip.logger:log> journal +info+ "hello world!")
     (close-journal journal)
+    (assert (= 1 (length (output-target base)))))
+
+  ;; test something that should trigger the timer
+  (let* ((base (make-instance 'in-memory-journal))
+	 (journal (make-instance 'buffered-journal :journal base :size 2 :interval (duration :sec 1))))
+    (grip.logger:log> journal +info+ "hello world!")
+    (sleep 1.1)
     (assert (= 1 (length (output-target base))))
-    (length (output-target base))))
+    (close-journal journal))
+
+  ;; there's code that restarts the background machinery if additional
+  ;; logging happens, this checks that.
+  (let* ((base (make-instance 'in-memory-journal))
+	 (journal (make-instance 'buffered-journal :journal base :size 2 :interval (duration :sec 1))))
+    (grip.logger:log> journal +info+ "hello world!")
+    (close-journal journal)
+    (assert (= 1 (length (output-target base))))
+    (grip.logger:log> journal +info+ "hello world!")
+    (grip.logger:log> journal +info+ "hello world!")
+    (close-journal journal)
+    (assert (= 3 (length (output-target base))))))
 
 (smoke-test-buffered-journal)
+
+(deftest buffer
+  ;; this is paltry because everything else is multi-threaded and rove
+  ;; struggles there.
+  (ok (signals (make-instance 'buffered-journal))))

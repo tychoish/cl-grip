@@ -93,6 +93,9 @@ passed to the following generic functions:
 Use
 ---
 
+Core Logging Functionality
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 The core "grip" system has very few external dependencies, and a secondary
 "ext" system contains implementations that rely on other external libraries,
 which you can opt into as needed.
@@ -127,6 +130,94 @@ centerally (or pass it around) and pass it directly to logging methods, as in:
 
   (let ((logger (make-instance 'grip.logger:stream-journal :name "example" :output-target *error-output*)))
     (grip.logger:info> logger "hello world"))
+
+Advanced Features
+~~~~~~~~~~~~~~~~~
+
+In addition to common workflows, ``cl-grip`` contains a few additional or
+non-obvious featres that might be interesting for some use-cases:
+
+JSON Formatting
+```````````````
+
+The ``grip.ext.json`` package includes two formatters that produce JSON
+formatted output:
+
+- ``json-simple-formatter`` does not annotate messages or add any metadata to
+  the output, but sends messages in a JSON format.
+
+- ``json-metadata-formatter`` adds a ``metadata`` field holding a JSON object
+  with three fields: time, level, and logger name.
+
+To use, just create and set the relevant object, as in the following: ::
+
+  (setf (message-formatter *default-journal*) (make-instance 'json-meatadata-formatter))
+  (setf (message-formatter *default-journal*) (make-instance 'json-simple-formatter))
+
+You can also construct a logger and pass the ``:format`` initarg, as in: ::
+
+  (make-instance 'stream-journal
+     :name "grip"
+     :threshold +info+
+     :format (make-instance 'json-metadata-formatter)
+     :output-target *standard-output)
+
+Merged Output Targets
+`````````````````````
+
+The core ``merged-journal`` implementation provides support for a kind of
+``tee``'d output pattern where the same log messages are dispatched to more
+than one output target. Often it makes sense to send output to some kind of
+centralized log storage system (perhaps on a buffer), while also mirroring
+those messages locally in some form.
+
+The method ``merge-journals`` will take any two journal implementations and
+create a merged output. There implementations to support merging outputs into
+an existing mergered journal, or merging two other journals.
+
+Buffered Output
+```````````````
+
+The ``grip.ext.buffer`` package provides an output target that buffers
+messages dispatched to an underlying sender for a defined interval or maximum
+number of messages.  To use, create an instance as follows: ::
+
+  (make-instance 'buffered-journal
+     :journal (make-instance 'base-journal)
+     :size 500
+     :interval (local-time-duration:duration :sec 15))
+
+The only required initform is ``journal``, size defaults to 100, and the
+interval defaults to 10 seconds.
+
+The implementation uses `chanl <https://github.com/zkat/chanl>`_ to handle the
+background processing, and is likely to perform poorly on particularly
+low-volume workloads. Messages are sent to the journal wrapped in batches.
+
+Batched Messages
+````````````````
+
+In the ``grip.message`` package there is a ``batch-message`` class, with the
+accompanying ``merge-messages`` generic function that should make it possible
+to combine groups of messages in a single "batch". There's fallback behavior
+that will unwindind and "send" each of the constituent messages
+individually. The implementations of ``merge-messages`` make batches easy to
+construct: ::
+
+  (merge-messages (make-message +info+ "one") (make-message +info+ "two"))
+
+  (let ((batch (make-instance 'batch-message')))
+     (merge-messages batch (make-message +info+ two)))
+
+You can also use ``merge-messages`` to merge two batches (the messages from
+the smaller batch are added to the larger batch,) and there are
+implementations to passing the arguments in the opposite order.
+
+The concept is that a batch of messages may make it easier for output
+implementations to take advantage of bulk delivery methods, which are more
+efficient at scale, particularly for output targets that might have some kind
+of rate limiting. Internally, ``batch-messages`` are used by the
+``buffered-journal``.
 
 Extension
 ---------
@@ -187,6 +278,28 @@ Grip is available under the terms of the Apache v2 license.
 Please feel free to create issues if you experience a problem or have a
 feature request. Pull requests are particularly welcome and encouraged!
 
+Workflow Suggestions
+~~~~~~~~~~~~~~~~~~~~
+
+- I suggest checking out this repository in your
+  ``~/quicklisp/local-projects/`` directory (or equivalent). To run coverage
+  tests you will want also make this available in
+  `~/.roswell/local-projects/tychoish/cl-grip`` (I use symlinks for these
+  operations.)
+
+- To run tests, you can either run them interactively in SLIME, or use the
+  ``make test`` target in the makefile. I prefer SLIME for interface for
+  development purposes, but the makefile is useful for validating the tests in
+  a clean environment.
+
+- A ``make coverage`` target exists to produce a coverage report in
+  ``report/cover-index.html`` directory. This target depends on having
+  ``rove`` in the ``PATH`` which you can achieve by ``ros install
+  fukamachi/rove``.
+
+Guidelines
+~~~~~~~~~~
+
 In general, consider the following guidelines:
 
 - grip aims to have full test coverage, particularly for the core system,
@@ -220,16 +333,7 @@ features or areas might be a good place to start:
   - (ext) output implementations targeting "alerting workloads" including XMPP,
     slack, email, and webhook delivery.
 
-  - (ext) output implementations that buffer outgoing messages for a period of
-    time or number of messages and then send messages in batches (10s or 100
-    messages). This would be multi-threaded and rely on a library like `chanl
-    <https://github.com/zkat/chanl>`_.
-
-- message handling improvements    :
-
-  - (core) a batch message handling infrastructure, which would be a message type
-    that holds a container of messages, which could be unwound as needed, and
-    could be useful in the context of message buffering.
+- message handling improvements:
 
   - (core) extending the ``structured-message`` and ``make-message`` handlers
     to do better with additional input types.
@@ -237,8 +341,9 @@ features or areas might be a good place to start:
   - (ext) improve the automatic metadata collection and population for
     structured messages, both during message collection and also by
     configuring formatters.
-    
-  - (core) provide easier helpers for creating arbitrary structured messages.
+
+  - (core) provide easier helpers for creating arbitrary structured
+    messages. Perhaps a ``with-message`` macro or similar.
 
   - (ext) message implementations and tooling that collect data about the
     application state.
