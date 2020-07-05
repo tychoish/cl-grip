@@ -20,15 +20,15 @@ Grip represents levels of messages as a number between 1 and 100, with "named
 levels" occurring at intervals of 10. The levels are defined as constants in
 the ``grip.level`` package. The named levels are:
 
-- trace
-- debug
-- info
-- notice
-- warning
-- error
-- critical
-- alert
-- emergency
+- ``trace``
+- ``debug``
+- ``info``
+- ``notice``
+- ``warning``
+- ``error``
+- ``critical``
+- ``alert``
+- ``emergency``
 
 Loggers posses a "threshold" level and only messages with levels greater than
 or equal to the threshold.
@@ -43,10 +43,10 @@ simple alist/plist and hashmaps.
 
 The following generic functions control message creation and behavior:
 
-- loggable-p
-- export-message
-- make-message
-- resolve-output
+- ``loggable-p``
+- ``export-message``
+- ``make-message``
+- ``resolve-output``
 
 Loggers
 ~~~~~~~
@@ -66,7 +66,7 @@ The following generic functions control logger behavior:
 - ``send-message`` delivers the message to the configured output, if the
   message is logable.
 - ``format-message`` formats the entire log line.
-- ``log`` send a message at a specific log level. There are implementations
+- ``log>`` send a message at a specific log level. There are implementations
   that take ``base-message`` implementations others that use ``make-message``
   to convert to a message type.
 
@@ -74,7 +74,17 @@ By convention send-message should call ``format-message`` (which can in turn
 call ``resolve-message``).
 
 There are also a collection of methods on ``(logger message)`` for each log
-level that are implemented generically in terms of ``log``
+level that are implemented generically in terms of ``log>``, they are:
+
+- ``trace>``
+- ``debug>``
+- ``info>``
+- ``notice>``
+- ``warning>``
+- ``error>``
+- ``critical>``
+- ``alert>``
+- ``emergency>``
 
 Formatters
 ~~~~~~~~~~
