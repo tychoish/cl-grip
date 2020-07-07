@@ -74,7 +74,12 @@
       (let* ((msg (make-instance 'simple-message :level +info+ :payload "hi"))
 	     (converted (make-message +alert+ msg)))
 	(ok (eq msg converted))
-	(ok (eq +alert+ (message-level msg))))))
+	(ok (eq +alert+ (message-level msg))))
+
+      (let* ((msg (make-instance 'simple-message :level +info+ :payload "hi"))
+	     (converted (new-message msg :level +alert+ :when nil)))
+	(ok (eq msg converted))
+	(ok (not (message-conditional msg))))))
 
   (testing "logable checks"
     (testing "simple"

@@ -1,6 +1,8 @@
 (defpackage grip
   (:use :cl)
+  (:import-from :grip.message :new-message)
   (:export :*default-logger*
+	   :new-message
 	   :log>
 	   :trace>
 	   :debug>

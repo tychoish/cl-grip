@@ -11,6 +11,7 @@
   (:export :base-message ;; base message class
 	   :simple-message
 	   :structured-message
+	   :new-message
 	   ;; accessors for message slots
 	   :message-conditional
 	   :message-timestamp
@@ -23,8 +24,8 @@
 	   :json-format
 	   :format-timestamp
 	   ;; interface for message constructors and helper methods
-	   :make-message
 	   :export-message
+	   :make-message
 	   :loggable-p
 	   ;; batch messages
 	   :merge-messages
@@ -81,23 +82,35 @@
     :type string))
   (:documentation "Simple messages just wrap a single string."))
 
+(defun new-message (input &key (level +debug+) ((:when conditional) t))
+  "Constructs a new message from an input type, with optional
+parameters:
+LEVEL: sets the level of the message that's created, defaulting to debug.
+
+WHEN: sets the conditional flag, making it possible to avoid wrapping
+log statements in conditionals, to render a log statement
+un-loggable."
+
+  (typecase input
+    (string (make-instance 'simple-message :level level :when conditional :payload input))
+    (hash-table (make-instance 'structured-message :level level :when conditional :payload input))
+    (property-list (make-instance 'structured-message :level level :when conditional :payload input))
+    (association-list (make-instance 'structured-message :level level :when conditional :payload input))
+    (base-message
+     (setf (message-conditional input) conditional)
+     input)
+    (otherwise
+     (if (export-message-p input)
+	 (export-message input)
+	 (signal 'type-error "message conversion")))))
+
+
 (defmethod make-message ((pri priority) (msg base-message))
   (setf (message-level msg) pri)
   msg)
 
 (defmethod make-message ((pri priority) input)
-  ;; if there's an export message implemented:
-  (when (export-message-p input)
-    (let ((out (export-message input)))
-      (setf (message-level out) pri)
-      (return-from make-message out)))
-
-  (typecase input
-    (string (make-instance 'simple-message :level pri :payload input))
-    (hash-table (make-instance 'structured-message :level pri :payload input))
-    (property-list (make-instance 'structured-message :level pri :payload input))
-    (association-list (make-instance 'structured-message :level pri :payload input))
-    (otherwise (signal 'type-error "message conversion"))))
+  (new-message input :level pri))
 
 (defmethod loggable-p :around ((message base-message) (threshold priority))
   (when
