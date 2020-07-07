@@ -141,6 +141,38 @@ centerally (or pass it around) and pass it directly to logging methods, as in:
   (let ((logger (make-instance 'grip.logger:stream-journal :name "example" :output-target *error-output*)))
     (grip.logger:info> logger "hello world"))
 
+You can easily pass strings, association lists, property lists, hash-tables,
+or any type that implements the ``export-message`` method. Additionally, the
+``new-message`` function, which is exported from the ``grip`` package, is
+useful for creating messages, and provides a few useful additional options:
+
+- To produce with a formatted string content, you can use one of the following
+  forms: ::
+
+    (new-message "hello {{name}}, welcome to {{place}}" :args '(("name" . "kip") ("place". "grip")))
+    (new-message "hello ~A, welcome to ~A" :args '("kip" "grip"))
+
+  Will produce a message that is formated with substitutions. The first form,
+  using alists, uses double-brace substitution (using cl-strings), and the
+  second form uses standard ``format`` macro formatting. This type, for
+  whatever it's worth defers string processing until the message is logged, at
+  which point the resolved message is cached, which may be more efficient for
+  longer strings with multiple outputs as well as in cases where messages may
+  not be logged.
+
+- To modify the ``conditional`` flag in a message (or ``:when`` argument to
+  the message constructor), which will prevent it from being logged. Use this
+  to avoid wrapping your logging statements in ``when`` blocks. ::
+
+    (new-message "hello kip!" :when (should-log (now)))
+
+- To define the level when creating the message, which is also available using
+  ``make-message``, to facilitate passing messages directly to ``log>``. The
+  default level value is ``+debug+`` but this is optional, and safely set to
+  the correct level when using a log level method. ::
+
+    (new-message "hello kip!" :level +info+)
+
 Advanced Features
 ~~~~~~~~~~~~~~~~~
 

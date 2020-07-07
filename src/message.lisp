@@ -2,7 +2,10 @@
   (:use :cl :grip.level)
   (:import-from :trivial-types
 		:association-list
-		:property-list)
+		:property-list
+		:proper-list
+		:association-list-p
+		:proper-list-p)
   (:import-from :grip.level
 		:priority
 		:priority>=)
@@ -11,6 +14,7 @@
   (:export :base-message ;; base message class
 	   :simple-message
 	   :structured-message
+	   :sprintf-message
 	   :new-message
 	   ;; accessors for message slots
 	   :message-conditional
@@ -82,14 +86,26 @@
     :type string))
   (:documentation "Simple messages just wrap a single string."))
 
-(defun new-message (input &key (level +debug+) ((:when conditional) t))
+(defun new-message (input &key (args nil) (level +debug+) ((:when conditional) t))
   "Constructs a new message from an input type, with optional
 parameters:
+
 LEVEL: sets the level of the message that's created, defaulting to debug.
 
 WHEN: sets the conditional flag, making it possible to avoid wrapping
 log statements in conditionals, to render a log statement
-un-loggable."
+un-loggable.
+
+ARGS: When the input is a string and args, this will produce a message
+that is roughly equivalent to 'sprintf' in other languages, though
+this implementation caches the string (for multi-output reuse) and
+supports both the 'format' macro's syntax when the args list is a
+proper list, or a double-bracketed token form when the the args list
+is an alist."
+
+  (when (and args (stringp input))
+    (return-from new-message (make-instance 'sprintf-message :level level :when conditional
+					    :base input :args args)))
 
   (typecase input
     (string (make-instance 'simple-message :level level :when conditional :payload input))
@@ -103,7 +119,6 @@ un-loggable."
      (if (export-message-p input)
 	 (export-message input)
 	 (signal 'type-error "message conversion")))))
-
 
 (defmethod make-message ((pri priority) (msg base-message))
   (setf (message-level msg) pri)
@@ -134,6 +149,55 @@ un-loggable."
 (defun export-message-p (message)
   "Returns true if the message object implements has an applicable message implementation."
   (find-method #'export-message '() (mapcar #'find-class (list (class-name (class-of message)))) nil))
+
+(defclass sprintf-message (base-message)
+  ((cache
+    :accessor message-payload
+    :initarg :payload
+    :initform nil)
+   (template
+    :type string
+    :initarg :base
+    :accessor message-sprintf-template
+    :initform nil)
+   (args
+    :type list
+    :initarg :args
+    :accessor message-sprintf-args
+    :initform nil)))
+
+(defmethod loggable-p ((message sprintf-message) (threshold priority))
+  (or (message-payload message)
+      (and (message-sprintf-template message)
+	   (message-sprintf-args message))))
+
+(let ((formatter (cl-strings:make-template-parser "{{" "}}")))
+  (defun sprintf (tmpl args)
+    (funcall formatter tmpl args)))
+
+(defmethod resolve-output (formatter (message sprintf-message))
+  (with-accessors ((args message-sprintf-args)
+		   (template message-sprintf-template)
+		   (cache message-payload)) message
+    (when cache
+      (return-from resolve-output cache))
+
+    (setf cache
+	  (cond
+	      ((association-list-p args)
+	       (sprintf template args))
+	      ((proper-list-p args)
+	       (push template args)
+	       (push nil args)
+	       (apply 'format args))
+	      (t
+	       (format nil "~A: [~A]" template args))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; formatting
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defclass format-config ()
   ()

@@ -191,6 +191,41 @@
 	  (ok (eq merged one)))
 	(ok (= 4 (length (message-batch one))))))))
 
+(deftest sprintf-message
+  (testing "new-message"
+    (ok (string= "hello kip" (resolve-output nil (new-message "hello {{cat}}" :args '(("cat" . "kip")))))))
+  (testing "formatter"
+    (ok (string= "hello kip" (grip.message::sprintf "hello {{cat}}" '(("cat" . "kip")))))
+    (ok (string= "hello {cat}" (grip.message::sprintf "hello {cat}" '(("cat" . "kip")))))
+    (ok (string= "hello {{cat}}" (grip.message::sprintf "hello {{cat}}" '((:cat "kip"))))))
+
+  (testing "loggable"
+    (ok (loggable-p (make-instance 'sprintf-message :level +info+ :payload "hi") +trace+))
+    (ok (loggable-p (make-instance 'sprintf-message :level +info+ :base "hi" :args '(1 2)) +trace+))
+    (ok (not (loggable-p (make-instance 'sprintf-message :level +info+ :args '(1 2)) +trace+)))
+    (ok (not (loggable-p (make-instance 'sprintf-message :level +info+ :base "hi") +trace+)))
+    (ok (not (loggable-p (make-instance 'sprintf-message :level +info+ :base "hi" :args '(1 2)) +alert+))))
+
+  (testing "resolve"
+    (testing "formats"
+      (testing "fallback"
+	(ok (string= "hello cats: [#(kip)]" (resolve-output nil (make-instance 'sprintf-message :base "hello cats" :args #("kip")))))))
+      (testing "alist"
+	(ok (string= "how many 2" (resolve-output nil (make-instance 'sprintf-message :base "how many {{cats}}" :args '(("cats" . 2)))))))
+      (testing "list"
+	(ok (string= "how many 2" (resolve-output nil (make-instance 'sprintf-message :base "how many ~D" :args '(2)))))))
+	(ok (string= "how many 2 ['(1 3 4)]" (resolve-output nil (make-instance 'sprintf-message :base "how many ~D [~A]" :args '(2 '(1 3 4)))))))
+
+    (testing "caching"
+      (ok (string= "payload" (resolve-output nil (make-instance 'sprintf-message :payload "payload" :base "foo" :args '(1 2)))))
+
+      (let* ((msg (make-instance 'sprintf-message :base "hi {{cat}}" :args '(("cat" . "kip"))))
+	     (output (resolve-output nil msg)))
+	(ok (string= "hi kip" output))
+	(setf (grip.message::message-sprintf-template msg) nil)
+	(setf (grip.message::message-sprintf-args msg) nil)
+	(ok (string= output (resolve-output nil msg)))))
+
 (defclass in-memory-journal (base-journal)
   ((output-target
     :initform (make-array 10 :adjustable t :fill-pointer 0)

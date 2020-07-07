@@ -5,7 +5,7 @@
   :author "Sam Kleinman <sam@tychoish.com>"
   :license  "Apache v2"
   :version "0.0.1"
-  :depends-on ("local-time" "trivial-types")
+  :depends-on ("local-time" "cl-strings" "trivial-types")
   :components ((:module "src"
 		:components
 		((:file "level")
