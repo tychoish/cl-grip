@@ -158,6 +158,7 @@ is an alist."
    (template
     :type string
     :initarg :base
+    :initform nil
     :accessor message-sprintf-template)
    (args
     :type list
@@ -167,8 +168,8 @@ is an alist."
 
 (defmethod loggable-p ((message sprintf-message) (threshold priority))
   (or (message-payload message)
-      (and (or (message-sprintf-template message)
-	       (not (string= "" (message-sprintf-template message))))
+      (and (or (> 0 (length (message-sprintf-template message)))
+	       (message-sprintf-template message))
 	   (message-sprintf-args message))))
 
 (let ((formatter (cl-strings:make-template-parser "{{" "}}")))
