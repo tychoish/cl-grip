@@ -124,7 +124,7 @@
     (close-journal journal)
     (assert (= 3 (length (output-target base))))))
 
-#+sbcl (smoke-test-buffered-journal)
+;; #+sbcl (smoke-test-buffered-journal)
 
 (deftest buffer
   ;; this is paltry because everything else is multi-threaded and rove

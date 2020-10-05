@@ -82,7 +82,7 @@
   ((description
     :initarg :payload
     :accessor message-payload
-    :initform nil
+    :initform ""
     :type string))
   (:documentation "Simple messages just wrap a single string."))
 
@@ -158,7 +158,7 @@ is an alist."
    (template
     :type string
     :initarg :base
-    :initform nil
+    :initform ""
     :accessor message-sprintf-template)
    (args
     :type list
@@ -168,8 +168,7 @@ is an alist."
 
 (defmethod loggable-p ((message sprintf-message) (threshold priority))
   (or (message-payload message)
-      (and (or (> 0 (length (message-sprintf-template message)))
-	       (message-sprintf-template message))
+      (and (< 0 (length (message-sprintf-template message)))
 	   (message-sprintf-args message))))
 
 (let ((formatter (cl-strings:make-template-parser "{{" "}}")))
