@@ -126,11 +126,10 @@
       (ok (not (loggable-p batch +trace+)))))
 
   (testing "set level"
-    (testing "override"
+    (testing "unset"
       (let ((batch (make-instance 'batch-message :level +info+)))
 	(loop repeat 5 do
 	  (let ((m (make-instance 'simple-message :payload "hi there")))
-	    (ok (not (message-level m)))
 	    (merge-messages batch m)))
 	(ok (= 5 (length (message-batch batch))))
 	(setf (message-level batch) +error+)
@@ -138,17 +137,16 @@
 	(loop for m across (message-batch batch) do
 	  (ok (= 70  (priority-value (message-level m))))))))
 
-    (testing "noop"
+    (testing "override"
       (let ((batch (make-instance 'batch-message :level +info+)))
 	(loop repeat 5 do
 	  (let ((m (make-instance 'simple-message :level +info+ :payload "hi there")))
-	    (ok (message-level m))
 	    (merge-messages batch m)))
 	(ok (= 5 (length (message-batch batch))))
-	(setf (message-level batch) +error+)
+	(setf (message-level batch) +critical+)
 
 	(loop for m across (message-batch batch) do
-	  (ok (= 40  (priority-value (message-level m)))))))
+	  (ok (= 80  (priority-value (message-level m)))))))
 
   (testing "create batch"
     (testing "merge two base"

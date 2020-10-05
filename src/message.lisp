@@ -60,7 +60,7 @@
    (level
     :type priority
     :initarg :level
-    :initform nil
+    :initform +trace+
     :accessor message-level))
   (:documentation "basic message is a complete implementation of the
   message protocol, and is the primary form for all messages. To log
@@ -249,8 +249,7 @@ is an alist."
 (defmethod (setf message-level) (level (batch batch-message))
   (map nil
        (lambda (message)
-	 (unless (message-level message)
-	   (setf (message-level message) level)))
+	 (setf (message-level message) level))
        (message-batch batch)))
 
 (defgeneric merge-messages (message1 message2)
