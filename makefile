@@ -1,6 +1,6 @@
 project := cl-grip
 
-test:sbcl
+test:test-sbcl
 
 test-sbcl:
 	sbcl --disable-debugger --eval '(asdf:test-system :$(project))' --quit

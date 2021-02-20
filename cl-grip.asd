@@ -19,11 +19,12 @@
   :description "Extensions and tools built on top of core grip interfaces."
   :author "Sam Kleinman <sam@tychoish.com>"
   :license  "Apache v2"
-  :depends-on ("local-time" "local-time-duration" "cl-json" "chanl")
+  :depends-on ("cl-grip" "local-time" "local-time-duration" "cl-json" "chanl")
   :components ((:module "ext"
 		:components
 		((:file "buffer")
-		 (:file "json")))))
+		 (:file "json"))))
+  :in-order-to ((test-op (test-op "cl-grip/tests"))))
 
 (defsystem "cl-grip/tests"
   :name "grip.tests"

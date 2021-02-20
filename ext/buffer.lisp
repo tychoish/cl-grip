@@ -43,7 +43,7 @@
   messages on a fixed interval or after a certain volume of
   messages."))
 
-(defmethod send-message ((journal buffered-journal) (message grip.message:base-message))
+(defmethod send-message ((journal buffered-journal) (message base-message))
   (setup-journal journal)
   (send (buffer-chan journal) message))
 
