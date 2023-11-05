@@ -30,12 +30,12 @@
 (in-package :grip.ext.buffer)
 
 (defclass buffered-journal (base-journal)
-  ((wrapped-journal :reader buffer-journal :initarg :journal :type base-journal :initform nil)
+  ((wrapped-journal :reader buffer-journal :initarg :journal :type (or null base-journal) :initform nil)
    (size :accessor buffer-size :initarg :size :type integer :initform 100)
    (interval :accessor buffer-interval :initarg :interval :type duration :initform (duration :sec 10))
-   (worker-send :accessor buffer-message-worker :type bt:thread :initform nil)
-   (worker-timer :accessor buffer-timer-worker :type bt:thread :initform nil)
-   (buffer-chan :accessor buffer-chan :type bounded-channel :initform nil)
+   (worker-send :accessor buffer-message-worker :type (or null bt:thread) :initform nil)
+   (worker-timer :accessor buffer-timer-worker :type (or null bt:thread) :initform nil)
+   (buffer-chan :accessor buffer-chan :type (or null bounded-channel) :initform nil)
    (timer-chan :accessor buffer-timer :type bounded-channel :initform (make-instance 'bounded-channel :size 1))
    (signal-chan :accessor buffer-signal :type bounded-channel :initform (make-instance 'bounded-channel :size 1)))
   (:documentation "The buffered journal wraps another journal
